@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XAU/USD · Sistema de Confluencias</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-primary:   #0a0a0c;
+    --bg-secondary: #111115;
+    --bg-tertiary:  #18181e;
+    --bg-hover:     #1e1e26;
+    --border-dim:   #1e1e28;
+    --border-mid:   #2a2a38;
+    --text-primary: #f0f0f0;
+    --text-sec:     #888899;
+    --text-muted:   #44445a;
+    --green:        #00C853;
+    --green-dim:    rgba(0,200,83,0.12);
+    --green-brd:    rgba(0,200,83,0.3);
+    --red:          #D50000;
+    --red-dim:      rgba(213,0,0,0.12);
+    --red-brd:      rgba(213,0,0,0.3);
+    --gold:         #C9A84C;
+    --gold-dim:     rgba(201,168,76,0.1);
+    --tv-blue:      #2962ff;
+  }
+
+  html, body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app { max-width: 960px; margin: 0 auto; padding: 16px 16px 48px; }
+
+  /* HEADER */
+  .header { text-align: center; padding: 24px 0 20px; border-bottom: 1px solid var(--border-dim); margin-bottom: 20px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--gold-dim); border: 1px solid rgba(201,168,76,0.25);
+    color: var(--gold); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 20px; margin-bottom: 10px;
+  }
+  .badge::before { content:''; width:6px; height:6px; background:var(--gold); border-radius:50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+  .header h1 { font-size: 22px; font-weight: 600; letter-spacing: .5px; }
+  .header h1 span { color: var(--gold); }
+  .header p { font-size: 11px; color: var(--text-muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; }
+  .reset-btn {
+    margin-top: 14px; background: transparent; border: 1px solid var(--border-mid);
+    color: var(--text-sec); padding: 7px 20px; border-radius: 6px; cursor: pointer;
+    font-size: 12px; letter-spacing: .5px; transition: all .2s; font-family: inherit;
+  }
+  .reset-btn:hover { border-color:#444; color:var(--text-primary); background:var(--bg-hover); }
+
+  /* DIRECTION */
+  .dir-wrap { background:var(--bg-secondary); border:1px solid var(--border-dim); border-radius:12px; padding:5px; display:flex; gap:5px; margin-bottom:20px; }
+  .dir-btn { flex:1; padding:12px; border:none; border-radius:9px; font-size:14px; font-weight:600; cursor:pointer; transition:all .25s; letter-spacing:1px; font-family:inherit; background:transparent; color:var(--text-muted); }
+  .dir-btn.buy.active  { background:var(--green); color:#fff; box-shadow:0 0 20px rgba(0,200,83,.2); }
+  .dir-btn.sell.active { background:var(--red);   color:#fff; box-shadow:0 0 20px rgba(213,0,0,.2); }
+  .dir-btn:not(.active):hover { color:var(--text-sec); background:var(--bg-hover); }
+
+  /* RESULT */
+  .result-box { background:var(--bg-secondary); border-radius:14px; padding:24px 20px 20px; margin-bottom:20px; text-align:center; border:1px solid var(--border-dim); transition:border-color .5s,box-shadow .5s; position:relative; overflow:hidden; }
+  .result-box::before { content:''; position:absolute; top:0;left:0;right:0; height:2px; }
+  .result-box.valid   { border-color:var(--green-brd); box-shadow:0 0 40px rgba(0,200,83,.06); }
+  .result-box.valid::before   { background:linear-gradient(90deg,transparent,var(--green),transparent); }
+  .result-box.invalid { border-color:var(--red-brd);   box-shadow:0 0 40px rgba(213,0,0,.06); }
+  .result-box.invalid::before { background:linear-gradient(90deg,transparent,var(--red),transparent); }
+  .prob-label { font-size:10px; color:var(--text-muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; }
+  .prob-value { font-size:60px; font-weight:700; line-height:1; transition:color .4s; font-variant-numeric:tabular-nums; }
+  .prob-value.valid   { color:var(--green); }
+  .prob-value.invalid { color:var(--red); }
+  .prob-value.neutral { color:var(--text-muted); }
+  .trade-signal { font-size:13px; font-weight:600; margin-top:10px; letter-spacing:1.5px; text-transform:uppercase; transition:color .4s; min-height:20px; }
+  .trade-signal.valid   { color:var(--green); }
+  .trade-signal.invalid { color:var(--red); }
+  .trade-signal.neutral { color:var(--text-muted); }
+  .prog-track { height:4px; background:var(--bg-tertiary); border-radius:2px; margin-top:16px; overflow:hidden; }
+  .prog-fill  { height:100%; border-radius:2px; transition:width .45s cubic-bezier(.4,0,.2,1),background .4s; width:0%; }
+  .stats-row { display:flex; gap:8px; margin-top:14px; }
+  .stat-chip { flex:1; background:var(--bg-tertiary); border:1px solid var(--border-dim); border-radius:8px; padding:8px; text-align:center; }
+  .stat-chip .sv { font-size:16px; font-weight:600; color:var(--text-primary); }
+  .stat-chip .sl { font-size:9px; color:var(--text-muted); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
+
+  /* SECTION TITLE */
+  .sec-title { font-size:10px; color:var(--text-muted); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:10px; padding:0 2px; }
+
+  /* CHECKLIST */
+  .checklist { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
+  .item { background:var(--bg-secondary); border-radius:10px; padding:13px 14px; display:flex; align-items:center; gap:12px; border:1px solid var(--border-dim); transition:border-color .3s,background .3s; cursor:pointer; user-select:none; }
+  .item:hover { background:var(--bg-hover); }
+  .item.on-buy  { border-color:var(--green-brd); background:var(--green-dim); }
+  .item.on-sell { border-color:var(--red-brd);   background:var(--red-dim); }
+  .item-dot { width:8px; height:8px; border-radius:50%; background:var(--text-muted); flex-shrink:0; transition:background .3s; }
+  .item.on-buy  .item-dot { background:var(--green); box-shadow:0 0 8px rgba(0,200,83,.5); }
+  .item.on-sell .item-dot { background:var(--red);   box-shadow:0 0 8px rgba(213,0,0,.5); }
+  .item-info { flex:1; min-width:0; }
+  .item-name { font-size:13px; color:var(--text-primary); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .item-desc { font-size:11px; color:var(--text-muted); margin-top:2px; }
+  .dtag { font-size:9px; padding:2px 7px; border-radius:10px; letter-spacing:.8px; text-transform:uppercase; font-weight:600; flex-shrink:0; }
+  .dtag.buy     { background:var(--green-dim); color:var(--green); border:1px solid var(--green-brd); }
+  .dtag.sell    { background:var(--red-dim);   color:var(--red);   border:1px solid var(--red-brd); }
+  .dtag.both    { background:rgba(201,168,76,.1); color:var(--gold); border:1px solid rgba(201,168,76,.25); }
+  .dtag.neutral { background:var(--bg-tertiary); color:var(--text-muted); border:1px solid var(--border-dim); }
+  .iw { font-size:12px; font-weight:600; flex-shrink:0; min-width:44px; text-align:right; transition:color .3s; }
+  .iw.ab { color:var(--green); }
+  .iw.as { color:var(--red); }
+  .iw.off{ color:var(--text-muted); }
+
+  /* SWITCH */
+  .switch { position:relative; width:40px; height:22px; flex-shrink:0; }
+  .switch input { opacity:0; width:0; height:0; position:absolute; }
+  .slider { position:absolute; inset:0; background:var(--bg-tertiary); border:1px solid var(--border-mid); border-radius:22px; cursor:pointer; transition:background .25s,border-color .25s; }
+  .slider::before { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; background:var(--text-muted); border-radius:50%; transition:transform .25s cubic-bezier(.4,0,.2,1),background .25s; }
+  input:checked + .slider.buy  { background:rgba(0,200,83,.15); border-color:rgba(0,200,83,.4); }
+  input:checked + .slider.buy::before  { transform:translateX(18px); background:var(--green); }
+  input:checked + .slider.sell { background:rgba(213,0,0,.15); border-color:rgba(213,0,0,.4); }
+  input:checked + .slider.sell::before { transform:translateX(18px); background:var(--red); }
+
+  /* EXTRAS */
+  .extras-card { background:var(--bg-secondary); border:1px solid var(--border-dim); border-radius:10px; overflow:hidden; margin-bottom:20px; }
+  .extra-row { display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid var(--border-dim); }
+  .extra-row:last-child { border-bottom:none; }
+  .extra-icon { width:30px; height:30px; border-radius:8px; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+  .extra-lbl { flex:1; font-size:13px; color:var(--text-sec); }
+  .extra-lbl small { display:block; font-size:10px; color:var(--text-muted); margin-top:1px; }
+
+  /* ═══ TRADINGVIEW SECTION ═══ */
+  .tv-section { margin-top: 28px; }
+
+  .tv-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; flex-wrap: wrap; gap: 10px;
+  }
+  .tv-header-left { display:flex; align-items:center; gap:10px; }
+
+  .tv-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(41,98,255,0.1); border: 1px solid rgba(41,98,255,0.25);
+    border-radius: 8px; padding: 5px 10px;
+  }
+  .tv-pill-dot { width:8px; height:8px; border-radius:50%; background:var(--tv-blue); box-shadow:0 0 6px rgba(41,98,255,.6); animation:pulse 2s infinite; }
+  .tv-pill span { font-size:11px; font-weight:600; color:var(--tv-blue); letter-spacing:.5px; }
+  .tv-title-lbl { font-size:13px; color:var(--text-sec); }
+
+  /* Timeframe buttons */
+  .tf-row { display:flex; gap:4px; flex-wrap:wrap; }
+  .tf-btn {
+    background:var(--bg-secondary); border:1px solid var(--border-dim); color:var(--text-muted);
+    font-size:11px; font-weight:600; padding:5px 10px; border-radius:6px; cursor:pointer;
+    transition:all .2s; font-family:inherit; letter-spacing:.5px;
+  }
+  .tf-btn:hover { border-color:var(--border-mid); color:var(--text-sec); background:var(--bg-hover); }
+  .tf-btn.active { background:var(--gold-dim); border-color:rgba(201,168,76,.3); color:var(--gold); }
+
+  /* Chart wrap */
+  .tv-wrap { background:var(--bg-secondary); border:1px solid var(--border-dim); border-radius:14px; overflow:hidden; position:relative; }
+  .tv-wrap::before { content:''; position:absolute; top:0;left:0;right:0; height:2px; background:linear-gradient(90deg,transparent,var(--tv-blue),transparent); z-index:1; pointer-events:none; }
+
+  #tv-container { width:100%; min-height:500px; }
+
+  .tv-loading {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:500px; gap:12px; color:var(--text-muted); font-size:13px;
+  }
+  .spin { width:28px; height:28px; border:2px solid var(--border-mid); border-top-color:var(--tv-blue); border-radius:50%; animation:rotate .8s linear infinite; }
+  @keyframes rotate { to{transform:rotate(360deg)} }
+
+  .tv-infobar {
+    display:flex; align-items:center; gap:8px; padding:10px 14px;
+    border-top:1px solid var(--border-dim); background:var(--bg-tertiary); flex-wrap:wrap;
+  }
+  .tv-chip { font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:4px; letter-spacing:.5px; }
+  .tv-chip::before { content:'·'; color:var(--border-mid); font-size:16px; line-height:0; }
+  .tv-chip:first-child::before { display:none; }
+  .tv-chip strong { color:var(--text-sec); }
+
+  /* FOOTER */
+  .footer { text-align:center; margin-top:32px; padding-top:16px; border-top:1px solid var(--border-dim); }
+  .footer p { font-size:10px; color:var(--text-muted); letter-spacing:.5px; line-height:1.9; }
+
+  /* ANIMATIONS */
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+  .item { animation:fadeIn .3s ease both; }
+  @keyframes bump { 0%{transform:scale(1)} 50%{transform:scale(1.04)} 100%{transform:scale(1)} }
+  .prob-value.bump { animation:bump .3s ease; }
+
+  @media(min-width:600px){
+    .app{padding:24px 20px 48px;}
+    .prob-value{font-size:72px;}
+    #tv-container{min-height:560px;}
+    .tv-loading{min-height:560px;}
+  }
+  @media(min-width:960px){
+    #tv-container{min-height:620px;}
+    .tv-loading{min-height:620px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="badge">XAU/USD · En vivo</div>
+    <h1>Confluencias <span>Oro</span></h1>
+    <p>Sistema de decisión inteligente</p>
+    <button class="reset-btn" onclick="resetAll()">↺ &nbsp;Reset todo</button>
+  </header>
+
+  <!-- DIRECCIÓN -->
+  <div class="dir-wrap">
+    <button class="dir-btn buy active" id="btn-buy"  onclick="setDir('buy')">▲ &nbsp;BUY</button>
+    <button class="dir-btn sell"       id="btn-sell" onclick="setDir('sell')">▼ &nbsp;SELL</button>
+  </div>
+
+  <!-- RESULTADO -->
+  <div class="result-box" id="result-box">
+    <div class="prob-label">Probabilidad de trade</div>
+    <div class="prob-value neutral" id="prob-value">0%</div>
+    <div class="trade-signal neutral" id="trade-signal">— Activa condiciones para calcular —</div>
+    <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="stats-row">
+      <div class="stat-chip"><div class="sv" id="s-act">0</div><div class="sl">Activas</div></div>
+      <div class="stat-chip"><div class="sv" id="s-tot">0%</div><div class="sl">Peso total</div></div>
+      <div class="stat-chip"><div class="sv" id="s-mis">100%</div><div class="sl">Restante</div></div>
+    </div>
+  </div>
+
+  <!-- CHECKLIST -->
+  <div class="sec-title">Condiciones de entrada</div>
+  <div class="checklist" id="checklist"></div>
+
+  <!-- CONFIGURACIÓN -->
+  <div class="sec-title">Configuración</div>
+  <div class="extras-card">
+    <div class="extra-row">
+      <div class="extra-icon">🔔</div>
+      <div class="extra-lbl">Alerta sonora<small>Suena al superar 50% de confluencia</small></div>
+      <label class="switch"><input type="checkbox" id="sound-toggle" checked><span class="slider buy"></span></label>
+    </div>
+    <div class="extra-row">
+      <div class="extra-icon">💾</div>
+      <div class="extra-lbl">Guardar estado<small>Persiste al cerrar el navegador</small></div>
+      <label class="switch"><input type="checkbox" id="persist-toggle" checked onchange="handlePersist()"><span class="slider buy"></span></label>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════
+       TRADINGVIEW
+  ═══════════════════════════════ -->
+  <div class="tv-section">
+    <div class="tv-header">
+      <div class="tv-header-left">
+        <div class="tv-pill">
+          <div class="tv-pill-dot"></div>
+          <span>TradingView</span>
+        </div>
+        <span class="tv-title-lbl">XAU/USD · Gráfico interactivo</span>
+      </div>
+      <div class="tf-row" id="tf-row">
+        <button class="tf-btn" onclick="changeTF(this,'1')">1M</button>
+        <button class="tf-btn" onclick="changeTF(this,'5')">5M</button>
+        <button class="tf-btn" onclick="changeTF(this,'15')">15M</button>
+        <button class="tf-btn" onclick="changeTF(this,'60')">1H</button>
+        <button class="tf-btn active" onclick="changeTF(this,'240')">4H</button>
+        <button class="tf-btn" onclick="changeTF(this,'D')">1D</button>
+        <button class="tf-btn" onclick="changeTF(this,'W')">1W</button>
+      </div>
+    </div>
+
+    <div class="tv-wrap">
+      <div id="tv-container">
+        <div class="tv-loading" id="tv-loading">
+          <div class="spin"></div>
+          <span>Conectando con TradingView…</span>
+        </div>
+      </div>
+      <div class="tv-infobar">
+        <div class="tv-chip"><strong>XAU/USD</strong></div>
+        <div class="tv-chip">Spot Gold · OANDA</div>
+        <div class="tv-chip">Datos en tiempo real</div>
+        <div class="tv-chip">Indicadores, dibujos y herramientas disponibles</div>
+        <div class="tv-chip">Abre en pantalla completa con el ícono ⤢</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p>
+      XAU/USD Confluencias v2.0 · TradingView Integration<br>
+      Esta app no genera señales automáticas. Úsala bajo tu propio criterio.<br>
+      <span style="color:#1a1a1a">──────────────</span><br>
+      No operar sin plan. No entrar sin confluencias.
+    </p>
+  </footer>
+
+</div><!-- /app -->
+
+<!-- ═══ TRADINGVIEW WIDGET LIBRARY ═══ -->
+<script src="https://s3.tradingview.com/tv.js" onload="initTV()" onerror="tvError()"></script>
+
+<script>
+/* ─────────────────────────────────────
+   TRADINGVIEW
+───────────────────────────────────── */
+let currentTF = '240';  // 4H por defecto
+
+function getChartHeight() {
+  if (window.innerWidth >= 960) return 620;
+  if (window.innerWidth >= 600) return 560;
+  return 500;
+}
+
+function initTV() {
+  buildWidget(currentTF);
+}
+
+function tvError() {
+  document.getElementById('tv-container').innerHTML = `
+    <div class="tv-loading">
+      <span style="font-size:22px">⚠️</span>
+      <span>No se pudo cargar TradingView.</span>
+      <span style="font-size:11px;color:#333">Verifica tu conexión a internet.</span>
+      <button onclick="location.reload()" style="margin-top:8px;background:transparent;border:1px solid #333;color:#666;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit">
+        🔄 Reintentar
+      </button>
+    </div>`;
+}
+
+function buildWidget(tf) {
+  const container = document.getElementById('tv-container');
+  const h = getChartHeight();
+
+  // Limpiar contenido previo y mostrar loading brevemente
+  container.innerHTML = `<div class="tv-loading" id="tv-loading" style="min-height:${h}px">
+    <div class="spin"></div><span>Cargando gráfico…</span>
+  </div>`;
+
+  // Crear el div que TradingView necesita
+  const el = document.createElement('div');
+  el.id = 'tv_chart_div';
+  el.style.width  = '100%';
+  el.style.height = h + 'px';
+  container.innerHTML = '';
+  container.appendChild(el);
+
+  /* ── Widget oficial TradingView Advanced Chart ──
+     Docs: https://www.tradingview.com/widget/advanced-chart/
+     Símbolo: OANDA:XAUUSD  (precio real de mercado, spread incluido)
+     Puedes cambiar el símbolo a:
+       - "FOREXCOM:XAUUSD"  (Forex.com)
+       - "FXCM:XAUUSD"      (FXCM)
+       - "GOLD"             (CME Futures)
+  */
+  new TradingView.widget({
+    container_id:        'tv_chart_div',
+    width:               '100%',
+    height:              h,
+    symbol:              'OANDA:XAUUSD',
+    interval:            tf,
+    timezone:            'America/Santiago',
+    theme:               'dark',
+    style:               '1',          // 1 = velas japonesas
+    locale:              'es',
+    toolbar_bg:          '#0a0a0c',
+    backgroundColor:     '#111115',
+    gridLineColor:       'rgba(30,30,40,0.6)',
+    hide_top_toolbar:    false,
+    hide_legend:         false,
+    hide_side_toolbar:   false,
+    allow_symbol_change: false,        // fijado en XAU/USD
+    withdateranges:      true,
+    save_image:          true,
+    show_popup_button:   true,         // botón para abrir chart en nueva ventana
+    popup_width:         '1200',
+    popup_height:        '700',
+    // Indicadores cargados por defecto (puedes modificar esta lista)
+    studies: [
+      'STD;EMA',     // Media móvil exponencial
+      'STD;RSI',     // RSI
+      'STD;MACD',    // MACD
+    ],
+    // Colores de velas: verde alcista, rojo bajista
+    overrides: {
+      'mainSeriesProperties.candleStyle.upColor':         '#00C853',
+      'mainSeriesProperties.candleStyle.downColor':       '#D50000',
+      'mainSeriesProperties.candleStyle.borderUpColor':   '#00C853',
+      'mainSeriesProperties.candleStyle.borderDownColor': '#D50000',
+      'mainSeriesProperties.candleStyle.wickUpColor':     '#00C853',
+      'mainSeriesProperties.candleStyle.wickDownColor':   '#D50000',
+    },
+    loading_screen: { backgroundColor:'#111115', foregroundColor:'#C9A84C' },
+  });
+}
+
+function changeTF(btn, tf) {
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTF = tf;
+  if (typeof TradingView !== 'undefined') buildWidget(tf);
+}
+
+/* ─────────────────────────────────────
+   APP: CONFIGURACIÓN DE CONDICIONES
+   Edita los pesos aquí directamente.
+   buyW + sellW no deben superar 100 por columna.
+───────────────────────────────────── */
+const CONDITIONS = [
+  { id:'demand',   name:'Zona de demanda',      desc:'Precio en zona de demanda activa',                   buyW:20, sellW:0  },
+  { id:'supply',   name:'Zona de oferta',        desc:'Precio en zona de oferta activa',                    buyW:0,  sellW:20 },
+  { id:'h1_env',   name:'Vela envolvente H1',    desc:'Patrón de reversión confirmado en H1',               buyW:15, sellW:15 },
+  { id:'h4_ret',   name:'Retroceso en H4',       desc:'Pullback hacia zona clave en H4',                    buyW:15, sellW:15 },
+  { id:'fri_high', name:'Alto del viernes',      desc:'Precio cerca del high semanal (últimas 4 semanas)',  buyW:10, sellW:10 },
+  { id:'fri_low',  name:'Bajo del viernes',      desc:'Precio cerca del low semanal (últimas 4 semanas)',   buyW:10, sellW:10 },
+  { id:'struct',   name:'Estructura de mercado', desc:'HH/HL confirmado (buy) · LH/LL confirmado (sell)',   buyW:5,  sellW:5  },
+  { id:'trend',    name:'Tendencia general',     desc:'Alineación multiframe (H4, D1, W)',                  buyW:5,  sellW:5  },
+];
+
+let dir        = 'buy';
+let states     = {};
+let prevOver50 = false;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('xau_v2');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    dir    = s.dir    || 'buy';
+    states = s.states || {};
+  } catch(e) {}
+}
+
+function saveState() {
+  try {
+    if (!document.getElementById('persist-toggle').checked) return;
+    localStorage.setItem('xau_v2', JSON.stringify({ dir, states }));
+  } catch(e) {}
+}
+
+function handlePersist() {
+  const on = document.getElementById('persist-toggle').checked;
+  if (!on) { try { localStorage.removeItem('xau_v2'); } catch(e) {} }
+  else saveState();
+}
+
+function setDir(d) {
+  dir = d;
+  document.getElementById('btn-buy').className  = 'dir-btn buy'  + (d==='buy'  ? ' active' : '');
+  document.getElementById('btn-sell').className = 'dir-btn sell' + (d==='sell' ? ' active' : '');
+  document.querySelectorAll('.slider').forEach(sl => { sl.className = 'slider ' + d; });
+  renderChecklist();
+  calcProb();
+  saveState();
+}
+
+function getW(c) { return dir === 'buy' ? c.buyW : c.sellW; }
+
+function calcProb() {
+  let total = 0, act = 0;
+  CONDITIONS.forEach(c => { const w = getW(c); if (states[c.id] && w > 0) { total += w; act++; } });
+  total = Math.min(total, 100);
+
+  const pv = document.getElementById('prob-value');
+  const ts = document.getElementById('trade-signal');
+  const rb = document.getElementById('result-box');
+  const pf = document.getElementById('prog-fill');
+
+  pv.classList.remove('bump'); void pv.offsetWidth; pv.classList.add('bump');
+  pv.textContent = total + '%';
+  document.getElementById('s-act').textContent = act;
+  document.getElementById('s-tot').textContent = total + '%';
+  document.getElementById('s-mis').textContent = Math.max(0, 100 - total) + '%';
+
+  if (total === 0) {
+    pv.className = 'prob-value neutral bump';
+    ts.className = 'trade-signal neutral'; ts.textContent = '— Activa condiciones para calcular —';
+    rb.className = 'result-box'; pf.style.width = '0%'; pf.style.background = '#333';
+    prevOver50 = false;
+  } else if (total >= 50) {
+    pv.className = 'prob-value valid bump';
+    ts.className = 'trade-signal valid';
+    ts.textContent = dir === 'buy' ? '✓ TRADE VÁLIDO — LONG XAU/USD' : '✓ TRADE VÁLIDO — SHORT XAU/USD';
+    rb.className = 'result-box valid'; pf.style.width = total + '%'; pf.style.background = 'var(--green)';
+    if (!prevOver50 && document.getElementById('sound-toggle').checked) playAlert(dir);
+    prevOver50 = true;
+  } else {
+    pv.className = 'prob-value invalid bump';
+    ts.className = 'trade-signal invalid'; ts.textContent = '✕ NO OPERAR — confluencias insuficientes';
+    rb.className = 'result-box invalid'; pf.style.width = total + '%'; pf.style.background = 'var(--red)';
+    prevOver50 = false;
+  }
+  updateWeights();
+}
+
+function updateWeights() {
+  CONDITIONS.forEach(c => {
+    const item = document.getElementById('i-' + c.id);
+    const wEl  = document.getElementById('w-' + c.id);
+    if (!item || !wEl) return;
+    const w = getW(c); const on = !!states[c.id];
+    item.className = 'item' + (on && w > 0 ? (dir === 'buy' ? ' on-buy' : ' on-sell') : '');
+    wEl.className  = 'iw ' + (on && w > 0 ? (dir === 'buy' ? 'ab' : 'as') : 'off');
+    wEl.textContent = w > 0 ? '+' + w + '%' : '—';
+  });
+}
+
+function renderChecklist() {
+  const cl = document.getElementById('checklist');
+  cl.innerHTML = '';
+  CONDITIONS.forEach((c, i) => {
+    const w = getW(c); const on = !!states[c.id];
+    const itemCls = 'item' + (on && w > 0 ? (dir === 'buy' ? ' on-buy' : ' on-sell') : '');
+    let tg, tt;
+    if (c.buyW > 0 && c.sellW > 0) { tg='both';    tt='BUY · SELL'; }
+    else if (c.buyW > 0)            { tg='buy';     tt='BUY'; }
+    else if (c.sellW > 0)           { tg='sell';    tt='SELL'; }
+    else                            { tg='neutral'; tt='N/A'; }
+    const wCls = on && w > 0 ? (dir==='buy' ? 'ab' : 'as') : 'off';
+    const sl   = dir === 'buy' ? 'buy' : 'sell';
+    cl.innerHTML += `
+      <div class="${itemCls}" id="i-${c.id}" style="animation-delay:${i*.04}s" onclick="toggle('${c.id}')">
+        <div class="item-dot"></div>
+        <div class="item-info">
+          <div class="item-name">${c.name}<span class="dtag ${tg}">${tt}</span></div>
+          <div class="item-desc">${c.desc}</div>
+        </div>
+        <div class="iw ${wCls}" id="w-${c.id}">${w > 0 ? '+'+w+'%' : '—'}</div>
+        <label class="switch" onclick="event.stopPropagation()">
+          <input type="checkbox" id="chk-${c.id}" ${on?'checked':''} onchange="toggle('${c.id}')">
+          <span class="slider ${sl}"></span>
+        </label>
+      </div>`;
+  });
+}
+
+function toggle(id) {
+  states[id] = !states[id];
+  const chk = document.getElementById('chk-' + id);
+  if (chk) chk.checked = !!states[id];
+  saveState(); calcProb();
+}
+
+function resetAll() {
+  states = {}; prevOver50 = false;
+  CONDITIONS.forEach(c => { const chk = document.getElementById('chk-'+c.id); if(chk) chk.checked=false; });
+  renderChecklist(); calcProb(); saveState();
+}
+
+function playAlert(dir) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const freqs = dir === 'buy' ? [330,440,550,660] : [660,550,440,330];
+    freqs.forEach((f, i) => {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = f; o.type = 'sine';
+      const t = ctx.currentTime + i*.1;
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.12,t+.03); g.gain.exponentialRampToValueAtTime(.001,t+.2);
+      o.start(t); o.stop(t+.25);
+    });
+  } catch(e) {}
+}
+
+/* INIT */
+loadState();
+renderChecklist();
+setDir(dir);
+</script>
+</body>
+</html>
